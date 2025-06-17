@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fergus JJ - Personal Website</title>
+    <meta name="description" content="Personal website of Fergus Johnson, a software developer and Computer Science graduate. Showcasing projects, experience, and contact information.">
+    <meta name="author" content="Fergus Johnson">
+    <!-- Open Graph / Facebook -->
+    <meta property="og:title" content="Fergus JJ - Personal Website">
+    <meta property="og:description" content="Personal website of Fergus Johnson, a software developer and Computer Science graduate. Showcasing projects, experience, and contact information.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://fergusjj.github.io/">
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Fergus JJ - Personal Website">
+    <meta name="twitter:description" content="Personal website of Fergus Johnson, a software developer and Computer Science graduate. Showcasing projects, experience, and contact information.">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <ul>
+                <li><a href="#home">About Me</a></li>
+                <li><a href="#experience">Professional Experience</a></li>
+                <li><a href="#projects">Projects</a></li>
+                <li><a href="#contact">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <br>
+        <section id="home" class="hero">
+                <h1>Fergus JJ</h1>
+                <p class="subtitle">Software Developer</p>
+                <div class="about-content">
+                    <p>Hi, I'm Fergus Johnson 👋</p>
+                    <p>I graduated with a strong academic record, excelling in modules such as Networking, Systems Programming, Data Structures and Algorithms and Machine Learning. These modules gave me a solid foundation in both the theoretical and practical aspects of computer science.</p>
+                    <p>I am passionate about building user friendly, efficient and scalable software solutions.</p>
+                    <p>I am also interested in developer workflow and productivity, and use tools like Neovim and tmux to optimize my development environment.</p>
+                    <p>Currently, I'm working on my most ambitious project yet: developing a full-stack iOS application using Swift for the frontend and Go for the backend. This project combines my passion for mobile development with robust backend systems, allowing me to create a seamless user experience while ensuring high performance and scalability.</p>
+                </div>
+        </section>
+
+        <section id="experience" class="experience">
+            <div class="container">
+                <h2>Professional Experience</h2>
+                <div class="experience-card">
+                    <div class="experience-header">
+                        <h3>Intern Software Engineer</h3>
+                        <div class="company">Quantcast, London</div>
+                        <div class="duration">June - August 2024</div>
+                    </div>
+                    <p>Completed a 12-week internship within the Platform Team, focusing on controller log management and system optimization.</p>
+                    <div class="tech-stack">
+                        <span class="tech">Go</span>
+                        <span class="tech">gRPC</span>
+                        <span class="tech">Kubernetes</span>
+                        <span class="tech">Kafka</span>
+                        <span class="tech">PostgreSQL</span>
+                    </div>
+                    <div class="project-highlights">
+                        <span class="highlight">Cost Reduction</span>
+                        <span class="highlight">System Optimization</span>
+                    </div>
+                    <p class="achievement">Key Achievements:</p>
+                    <ul class="achievement-list">
+                        <li>Deprecated Athena usage and optimized Postgres performance, reducing operational costs</li>
+                        <li>Streamlined data pathways from Kafka to storage</li>
+                        <li>Developed a new gRPC service for programmatic log access</li>
+                        <li>Created a Python module for Jupyter Notebook integration</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section id="projects" class="projects">
+            <div class="container">
+                <h2>Projects</h2>
+                <div class="project-grid">
+                    <div class="project-card">
+                        <h3>iOS App (In Progress)</h3>
+                        <p>A full-stack iOS application built with Swift and Go, demonstrating modern mobile development practices and robust backend architecture.</p>
+                        <p>The API uses the Spotify API to fetch user's playlists and songs, and the Supabase database to store user data.</p>
+                        <p>A separate microservice fetches repeatedly fetches user listening history from the Spotify API and stores it in the Supabase database.</p>
+                        <div class="tech-stack">
+                            <span class="tech">Go</span>
+                            <span class="tech">Swift</span>
+                            <span class="tech">SwiftUI</span>
+                            <span class="tech">Spotify API</span>
+                            <span class="tech">Supabase</span>
+                            <span class="tech">Docker</span>
+                        </div>
+                    </div>
+                    <div class="project-card">
+                        <h3>Copy Trader</h3>
+                        <p>A copy trading application built with Go whilst working with a client to integrate with the Ctrader FIX API to enable automated trading functionality.</p>
+                        <p>The App uses the Whop API to manage users and subscriptions. The API is set up using Docker and Redis to temporarily store user positions.</p>
+                        <p>A monitor microservice reverse engineers Ctrader's proprietary websocket protocol to efficiently fetch real-time position updates, demonstrating advanced protocol analysis and implementation skills.</p>
+                        <div class="tech-stack">
+                            <span class="tech">Go</span>
+                            <span class="tech">Docker</span>
+                            <span class="tech">Redis</span>
+                            <span class="tech">Ctrader API</span>
+                            <span class="tech">Whop API</span>
+                        </div>
+                        <div class="project-highlights">
+                            <span class="highlight">Client Project</span>
+                        </div>
+                        <div class="project-links">
+                            <a href="https://github.com/FergusJJ/AutoFxApp" target="_blank" class="project-link">
+                                <i class="fab fa-github"></i> App Repository
+                            </a>
+                            <a href="https://github.com/FergusJJ/AutoFxAPI" target="_blank" class="project-link">
+                                <i class="fab fa-github"></i> API Repository
+                            </a>
+                        </div>
+                    </div>
+                    <div class="project-card">
+                        <h3>C Server Project</h3>
+                        <p>A toy multi-threaded server written in C, designed for learning and demonstration purposes. It handles concurrent client connections and showcases low-level networking and systems programming skills, including sockets, concurrency, and resource management.</p>
+                        <div class="tech-stack">
+                            <span class="tech">C</span>
+                            <span class="tech">POSIX Threads</span>
+                            <span class="tech">Sockets</span>
+                        </div>
+                        <div class="project-links">
+                            <a href="https://github.com/FergusJJ/c_server_simple" target="_blank" class="project-link">
+                                <i class="fab fa-github"></i> GitHub Repository
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="contact" class="contact">
+            <div class="container">
+                <h2>Get in Touch</h2>
+                <div class="social-links">
+                    <a href="https://github.com/FergusJJ" target="_blank"><i class="fab fa-github"></i></a>
+                    <a href="https://www.linkedin.com/in/fergus-johnson-4a310125a/" target="_blank"><i class="fab fa-linkedin"></i></a>
+                    <a href="mailto:contact@fergus.cloud"><i class="fas fa-envelope"></i></a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 Fergus JJ. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html> 
