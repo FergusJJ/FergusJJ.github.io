@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fergus JJ - Blogs</title>
+    <meta name="description" content="Blog posts by Fergus Johnson">
+    <meta name="author" content="Fergus Johnson">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body>
+    <header>
+        <nav>
+            <ul>
+                <li><a href="/">About Me</a></li>
+                <li><a href="/blogs/blogs.html">Blogs</a></li>
+            </ul>
+        </nav>
+    </header>
+<div class="container">
+        <h1 class="title">LSM and B-Trees: A dive into how databases store your data</h1>
+        <hr class="divider">
+        <div class="blogs-container">
+            <h2 class="subtitle">Background: Why databases need specialized data structures</h2>
+                <p> At a high level, a database is a program which performs two operations: writing data and reading
+                    data. <br>
+                    A naive database may achieve this by appending new key-value pairs to a text file and using length
+                    prefixes to make sure that values are read correctly.<br>
+                    For example:
+                </p>
+                <p class="code-inline">
+                    9:firstname4:john<br>
+                    8:lastname3:doe
+                </p>
+                <p> This naive approach has good performance for writes, as all key-value pairs are simply appended to
+                    the file which is an O(1) operation.
+                    On the other hand reading may require you to scan the entire file, even if the key doesn't exist -
+                    making it an O(n) operation.
+                </p>
+                <p>This also doesn't consider what should be done when you want to delete or update a value, do you
+                    simply mark it with a tombstone (a marker indicating deletion)?
+                    This may work at first but repeated updates or deletions can lead to fragmentation, as outdated
+                    entries would accumulate, wasting valuable disk space.
+                </p>
+                <p>
+                    Instead of only storing your data, you could also use some auxiliary data structure to keep track of
+                    the memory address of a key. An index points the keys to a specific page in memory, reducing the
+                    amount of data that needs to be scanned.
+                    This would change the read operation to a case of checking your indexes and jumping directly to the
+                    key. In the case that a key doesn't exist you don't have to scan your entire database since you can
+                    just check your index.
+                </p>
+                <p>
+
+                    This gives the database another task - to maintain up-to-date indexes. Each time you write to the
+                    database the index must be updated, either by rewriting affected indexes or appending new entries.
+                    Therefore there is a tradeoff for having faster reads, perhaps on a smaller write-heavy database it
+                    is not worth tracking indexes.
+                    In larger databases, however, indexes are essential.
+                </p>
+                <p>
+                    This raises the question: <i>how do we structure indexes efficiently?</i><br>
+                    There are two common approaches for organizing indexes:
+                </p>
+                <ul>
+                    <li> <strong>B-Trees</strong>: Maintains a sorted tree structure on disk</li>
+                    <li> <strong>LSM-Trees</strong>: A newer approach using structured append-only log files</li>
+                </ul>
+                <p>
+                Both serve the same purpose with unique tradeoffs, it is therefore important to understand these before picking a database which uses either approach.<br>
+                Before discussing their tradeoffs, let's dive into how each approach works - starting with the traditional B-Tree.
+                </p>
+
+        <hr class="divider">
+                <h2 class="subtitle">B-Trees</h2>
+                <p>
+                  B-Trees were first introduced in 1970 by Rudolf Bayer and Edward M. McCreight. They've become the foundation for traditional database systems because they maintain sorted data while optimizing for disk access patterns.
+                  </p>
+                  <p class="text-note"> Note: Modern databases typically use B+Trees, a variant of B-Trees with additional optimizations (discussed in the optimizations section). For simplicity, I'll use 'B-Tree' to refer to both, as their core concepts are similar.
+                </p>
+                <p>
+                  A B-Tree is a tree-like structure where each page (essentially nodes) contains keys and references to any child pages.
+                  Each page can contain up to m keys and m+1 child pointers, where m is the maximum number of keys per page. The branching factor (typically m+1) represents the number of child pointers, determining how wide/shallow the tree is.
+                  All pages are typically 4, 8 or 16KB, aligned with disk/SSD block sizes in order to minimize I/O operations, although sizes can vary based on database configuration. Therefore each disk read fetches an entire page, which can contain hundreds of keys.
+                  Child pointers between keys indicate ranges.</p>
+                  <p>For example, a pointer between keys '10' and '20' directs to a child page containing all keys from 10 up to (but not including) 20.
+                  At the top is a root page which points to child pages, following down until one of them points to a leaf page. Leaf pages contain either a value to each key inline or a reference to where the value is stored on disk.
+                  Since the maximum depth of a B-Tree with n keys is O(log_b n), where b is the branching factor, a B-Tree with millions of keys can be traversed with only a few disk reads.
+                </p>
+
+                <figure>
+                    <img src="/blogs/images/lsm-and-b-trees/b_tree_index.png" alt="B-Tree" style="max-width: 600px;">
+                    <figcaption><a href="https://blog.toadworld.com/2017/05/08/how-oracle-b-tree-indexes-work">B-Tree structure showing internal nodes with keys and pointers, and leaf nodes containing actual data values</a></figcaption>
+                </figure>
+
+                <h3 class="subtitle">B-Tree Operations</h3>
+                <p><strong>Reading:</strong> Start at the root and follow references based on key comparisons until reaching the target leaf page.<br><br>
+                <strong>Updating a value:</strong> The value is updated in the leaf page and the modified page is written back to disk. If they key changes, parent pointers may need updating to maintain the trees sorted structure.<br><br>
+                <strong>Adding a key:</strong> Find the page with the range encompassing the key then insert the key into the page. If there is no more space in the page, the page is split in two - this requires the parent node to be updated (possibly cascading upwards).<br><br>
+                <strong>Deleting a key:</strong> Find and remove the key. If this leaves a node with too few keys (less than [m/2] - 1), rebalance by either borrowing keys from siblings or merging nodes. This may cascade up the tree, potentially reducing its height.</p>
+
+                <h3 class="subtitle">Reliability Mechanisms</h3>
+                <p>One common question with databases is what to do in the event of a crash, there needs to be a way to ensure that in the event that the system fails it can be restored to the correct state.
+                In order to prevent data loss in the event of a crash B-Trees use a WAL (write ahead log), which is an append-only log file.
+                Before any operations are performed on the B-Tree they are written to the WAL.
+                Once the WAL has been saved correctly, the in-memory version of the B-Tree page is updated.
+                In classic B-Trees, after the WAL is updated, the modified page is written back to its original location on disk.
+                If the system crashes then the B-Tree can be restored to its most recent state by reading this file.</p>
+
+                <p>The other question is what to do when multiple threads try to access the database at once, you want to ensure that neither thread gets stale data, while not sacrificing too much throughput.
+                A latch is a short-term page-level lock which is used to protect a shared data structure in memory - in this case, the pages that are being traversed.
+                It is typically only held during the physical operation on the data structure, while a lock would usually be held for the entire transaction.
+                This protects a single page from being modified by two threads at once while remaining granular enough to not sacrifice too much throughput.</p>
+
+                <h3 class="subtitle">Optimizations</h3>
+                <p>Some B-Trees use a Copy-on-Write (CoW) scheme as opposed to a WAL. When a page is modified, a copy of the page is created and changes are made to this page.
+                Once the transaction has completed, the parent page's pointer is updated to point to the up-to-date version.
+                Copy-on-write creates a new page for updates and updates parent pointers, which may require multiple writes. For small changes, copying entire pages can increase I/O costs.</p>
+
+                <p>One optimization that can be made is to store only key values in non-leaf nodes (this is called a B+Tree), keeping all keys in leaf nodes,
+                In a B+Tree, non-leaf nodes store keys and child pointers, while leaf nodes store both keys and their associated values/pointers to values.
+                Leaf nodes are also linked together, allowing for efficient range scans without the need to traverse the tree.
+                By storing only keys and pointers in non-leaf nodes, a B+Tree increases the branching factor, allowing more keys per node and a shallower tree.
+                Because of the increase in branching factor, trees are now much wider and shallower meaning that fewer I/O operations are needed to reach the leaf pages.
+                Most databases use B+Trees with pointers between sibling leaf nodes as opposed to B-Trees, this makes range queries incredibly efficient.</p>
+                <hr class="divider">
+                <h2 class="subtitle">LSM-Trees</h2>
+                <p>A structured log is a sequence of key-value pairs, which appear in the order which they are written.
+                Key value pairs that are added later (and appear later in the file) take precedence over previous pairs.</p>
+
+                <p>LSM-Trees use a type of structured log called an SSTable (Sorted-String Table). SSTables add the requirement that keys must be in sorted order.
+                For example, the key-value pairs 'bat:1', 'dog:1', 'cat:1' should appear in the order: 'bat', 'cat', 'dog' - regardless of the order they were added.
+                This has the advantage over a standard structured log of being able to perform range queries.
+                It also allows for a sparse in-memory index, say only keeping an index for each letter of the alphabet, and then seeking to the queried key.</p>
+
+                <h3 class="subtitle">SSTable construction</h3>
+                <p>Constructing an SSTable can be done with the use of a sorted structure stored in memory (such as a red-black tree), this is what's referred to as a memtable.
+                All database updates should be written to the memtable until some space threshold is hit.
+                This threshold varies in practice, LevelDB has a default size limit of 4MB, while Cassandra's is dynamically determined based on total memory usage, with flushes triggered once a configurable threshold is crossed.
+                A smaller memtable threshold results in faster flushes due to the reduced time needed to walk and serialize the memtable, as well as lower I/O throughput requirements.
+                On the other hand, a larger memtable threshold will result in fewer flushes and fewer SSTables, which increases read performance.
+                Once the threshold is hit, the memtable is flushed to disk as a new immutable SSTable and a new memtable is created while the flush happens on a separate thread.</p>
+
+                <figure>
+                    <img src="/blogs/images/lsm-and-b-trees/red_black_tree.png" alt="Red-black Tree" style="max-width: 600px;">
+                    <figcaption><a href="https://medium.com/@contact.nehajoglekar/demystifying-red-black-trees-d4766c926200" >Red-black tree used as memtable - maintains sorted order in memory before flushing to SSTable</a></figcaption>
+                </figure>
+
+                <h3 class="subtitle">SSTable structure</h3>
+                <p>An SSTable is an immutable sorted file format.
+                It consists of:</p>
+                <p><strong>data blocks:</strong> where the key-value pairs are stored, sorted by key.</p>
+                <p><strong>index blocks:</strong> a sparse index that stores every 10th or 100th key with its disk offset, allowing seeking to the approximate location.</p>
+                <p><strong>footer/metadata:</strong> contains pointers to the index blocks and bloom filter, along with compression and format information.</p>
+
+                <p>The sparse index blocks may only store one key per data block, allowing them to act as bounds for searching.
+                To further optimize reads bloom filters are stored with each SSTable to help optimize reads by quickly determining if a key is not present.
+                However, bloom filters are probablistic so while they may return false positives, although they won't ever return false negatives.
+                This allows for the system to skip certain files if they don't contain the key being searched for.</p>
+
+
+                <h3 class="subtitle">Compaction</h3>
+                <p>Because SSTables are a type of append-only log, it is possible for the same key to appear across different SSTables.
+                Since only the most recent key-value pair is used, a process is needed to prune stale values - this process is called compaction.
+                Compaction is a background process which merges SSTables, reducing disk usage and the number of SSTables that must be searched (in the case that a key doesn't exist in the most recent SSTable).
+                Every key in an SSTable must be unique, so when SSTables are merged, stale key-value entries (and deleted keys) are discarded.
+                The main compaction methods are:</p>
+
+                <h4 class="subtitle">Size-tiered compaction</h4>
+                <p>Merges SSTables of similar sizes, compaction is triggered when tables in the same tier reach a certain threshold.
+                The most recently added keys will be in the smallest SSTable (or the table it is merged into).
+                Size-tiered compaction can lead to some tables being much larger than others.
+                This can result in higher read amplification as many large SSTables may need to be searched for a single key, but only small blocks are read per SSTable, which leads to an increase number of I/O operations.
+                On the other hand, since compaction is triggered infrequently, there is lower write amplification but there may be latency spikes if a write triggers a large compaction operation.
+                This makes size-tiered compaction better for write-heavy workloads.</p>
+                <p class="text-note">Note: write amplification measures how much more data is written than the application thought it was writing, read amplification is the amount of data that mist be read from disk to satisfy a query</p>
+                <figure>
+                    <img src="/blogs/images/lsm-and-b-trees/lsm_tree.webp" alt="LSM-Tree" style="max-width: 600px;">
+                    <figcaption><a href="https://vivekbansal.substack.com/p/what-is-lsm-tree">LSM-Tree architecture showing multiple levels with size-tiered compaction strategy</a></figcaption>
+                </figure>
+
+                <h4 class="subtitle">Leveled compaction</h4>
+                <p>Organizes SSTables into levels based on their size, compaction to merge a table into the next level is triggered when the current level fills up (for example, 4 L0 SSTables could trigger compaction) - each level is typically 10x larger, but this ratio can be configured in many databases.
+                Note: L0 can contain duplicate keys because when a memtable is flushed you cannot de-duplicate keys until compaction, you may have multiple L0 SSTables and they may contain the same key. This is not the case with levels beyond L0 which contain unique keys.
+                This leads to more frequent compactions, while this will increase write amplification, more frequent compactions means that there are fewer duplicate entries as they are removed during the compaction process.
+                Leveled compaction will have lower read amplification because the sparse indexes can be checked to decide which SSTable to load, therefore the system can be more granular since SSTables in lower levels will be smaller.</p>
+
+                <p>Both strategies have pros and cons depending on their use case, RocksDB uses leveled compaction while Cassandra uses size-tiered compaction.</p>
+
+                <h3 class="subtitle">LSM-Tree Operations</h3>
+                <p><strong>Reading:</strong> Check the memtable first, then check the SSTables from newest to oldest (using bloom filters and range indexes to avoid unnecessary reads).<br><br>
+                <strong>Writing:</strong> Write to WAL, then add to memtable. If the memtable is full then flush it to disk as a new SSTable.<br><br>
+                <strong>Updating:</strong> The same operation as writing, newer values take precedence, duplicates across different SSTables are pruned during compaction.<br><br>
+                <strong>Deleting:</strong> Write a tombstone marker to the key, this key will be deleted during compaction.</p>
+                <p>For example:</p>
+                <p class="code-inline">
+                    SSTable A: user_123 -> {"firstname": "john", "lastname": "doe"}<br>
+                    SSTable B (newer): user_123 -> &lt;TOMBSTONE&gt;<br>
+                    SSTABLE C (after compaction) will not contain a 'user123' key
+                </p>
+
+                <h3 class="subtitle">Reliability Mechanisms</h3>
+                <p>LSM-Trees use a WAL to ensure durability. All writes are written to the WAL before they are added to the memtable.
+                If the system crashes the memtable can be restored using the WAL.
+                Since LSM-Trees don't have to worry about page splitting or merging mid-crash, the recovery process is simpler.</p>
+
+                <p>SSTables are also read-only so the main concurrency concern is with the memtable. A lock may be used to ensure that multiple threads don't attempt to update it at once.</p>
+
+                <figure>
+                    <img src="/blogs/images/lsm-and-b-trees/sstable.webp" alt="SSTable" style="max-width: 600px;">
+                    <figcaption><a href="https://www.scylladb.com/glossary/sstable/">LSM-Tree write path: data flows from memtable to immutable SSTables on disk</a></figcaption>
+                </figure>
+
+        <hr class="divider">
+                <h2 class="subtitle">Comparison</h2>
+                <p>Now that we have an understanding of the differences between the two approaches, we can compare their tradeoffs directly.</p>
+
+                <h3 class="subtitle">Write Performance</h3>
+                <p>B-Trees tend to have lower write throughput than LSM trees due to random I/O and page splits whereas LSM-Trees are more predictable and batch write operations in the memtable.
+                However LSM-Trees have higher write amplification than B-Trees because compaction may require rewriting data multiple times to merge SSTables.</p>
+
+                <h3 class="subtitle">Read Performance</h3>
+                <p>B-Trees have fast lookup due to logarithmic traversal (worst case).
+                Memtables lookups are also typically O(log n), but if a key is in an SSTable, multiple SSTables may need to be searched which can increase latency depending on the compaction strategy.
+                B-Trees also allow for efficient range scans to be performed, LSM-Trees require optimizations such as bloom filters and sparse indexes to match this.</p>
+
+                <h3 class="subtitle">Storage Efficiency</h3>
+                <p>LSM-Trees can have better storage efficiency than B-Trees when compaction effectively removes stale data, although B-Trees may be more efficient in cases with minimal fragmentation.
+                Fragmentation can occur in B-Trees due to underfilled pages and in-place updates.
+                LSM-Trees can accumulate stale data (whether across L0 SSTables or through tombstones), but regular compaction will solve these issues.</p>
+
+                <h3 class="subtitle">Implementation Complexity</h3>
+                <p>B-Trees require complex page-splitting logic and fine grained concurrency control through latching.
+                LSM-Trees have more complexity when it comes to compaction scheduling.
+                LSM-Trees are less complex w.r.t. crash recovery due to immutability of SSTables.</p>
+
+        <hr class="divider">
+                <h2 class="subtitle">Summary</h2>
+                <p>B-Trees and LSM-Trees are foundational data structures for database indexing, each with their own tradeoffs.
+                B-Trees are used by databases such as PostgreSQL and MySQL.
+                LSM-Trees are used by databases such as Cassandra and LevelDB.</p>
+
+                <p>B-Trees are suited for read-heavy workloads due to their logarithmic time reads but can suffer from random page splitting for writes.
+                LSM-Trees perform best in write-heavy scenarios due to the efficiency of append-only operations, but their performance depends on compaction strategies which will need to be chosen carefully by the user.
+                Both use WALs for durability and optimize I/O usage through different approaches.
+                The decision to pick one data structure over the other should be made based on the nature of the application.</p>
+        </div>
+    </div>
+</body>
+
+</html>
