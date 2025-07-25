@@ -92,7 +92,7 @@
                 </p>
 
                 <figure>
-                    <img src="/blogs/images/lsm-and-b-trees/b_tree_index.png" alt="B-Tree" style="max-width: 600px;">
+                    <img src="/blogs/images/lsm-and-b-trees/b_tree_index.png" alt="B-Tree" >
                     <figcaption><a href="https://blog.toadworld.com/2017/05/08/how-oracle-b-tree-indexes-work">B-Tree structure showing internal nodes with keys and pointers, and leaf nodes containing actual data values</a></figcaption>
                 </figure>
 
@@ -145,7 +145,7 @@
                 Once the threshold is hit, the memtable is flushed to disk as a new immutable SSTable and a new memtable is created while the flush happens on a separate thread.</p>
 
                 <figure>
-                    <img src="/blogs/images/lsm-and-b-trees/red_black_tree.png" alt="Red-black Tree" style="max-width: 600px;">
+                    <img src="/blogs/images/lsm-and-b-trees/red_black_tree.png" alt="Red-black Tree" >
                     <figcaption><a href="https://medium.com/@contact.nehajoglekar/demystifying-red-black-trees-d4766c926200" >Red-black tree used as memtable - maintains sorted order in memory before flushing to SSTable</a></figcaption>
                 </figure>
 
@@ -178,7 +178,7 @@
                 This makes size-tiered compaction better for write-heavy workloads.</p>
                 <p class="text-note">Note: write amplification measures how much more data is written than the application thought it was writing, read amplification is the amount of data that mist be read from disk to satisfy a query</p>
                 <figure>
-                    <img src="/blogs/images/lsm-and-b-trees/lsm_tree.webp" alt="LSM-Tree" style="max-width: 600px;">
+                    <img src="/blogs/images/lsm-and-b-trees/lsm_tree.webp" alt="LSM-Tree" >
                     <figcaption><a href="https://vivekbansal.substack.com/p/what-is-lsm-tree">LSM-Tree architecture showing multiple levels with size-tiered compaction strategy</a></figcaption>
                 </figure>
 
@@ -210,7 +210,7 @@
                 <p>SSTables are also read-only so the main concurrency concern is with the memtable. A lock may be used to ensure that multiple threads don't attempt to update it at once.</p>
 
                 <figure>
-                    <img src="/blogs/images/lsm-and-b-trees/sstable.webp" alt="SSTable" style="max-width: 600px;">
+                    <img src="/blogs/images/lsm-and-b-trees/sstable.webp" alt="SSTable">
                     <figcaption><a href="https://www.scylladb.com/glossary/sstable/">LSM-Tree write path: data flows from memtable to immutable SSTables on disk</a></figcaption>
                 </figure>
 

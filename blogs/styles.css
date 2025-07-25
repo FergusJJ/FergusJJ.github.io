@@ -179,12 +179,24 @@ body {
 }
 
 .blogs-container img {
-    max-width: 100%;
+    max-width: 600px;
     height: auto;
     display: block;
     margin: 1.5rem auto;
     border-radius: 4px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 768px) {
+    .blogs-container img {
+        max-width: 90%; 
+    }
+}
+
+@media (max-width: 480px) {
+    .blogs-container img {
+        max-width: 95%; 
+    }
 }
 
 .blogs-container figure {
