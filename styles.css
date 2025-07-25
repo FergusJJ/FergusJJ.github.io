@@ -304,9 +304,6 @@ nav ul li a[href="#experience"] {
 
 /* Responsive Design */
 @media (max-width: 768px) {
-    nav ul {
-        display: none;
-    }
     .container {
         padding: 0 10px;
     }
