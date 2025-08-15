@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fergus JJ - Blogs</title>
+    <meta name="description" content="Blog posts by Fergus Johnson">
+    <meta name="author" content="Fergus Johnson">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body>
+    <header>
+        <nav>
+            <ul>
+                <li><a href="/">About Me</a></li>
+                <li><a href="/blogs/blogs.html">Blogs</a></li>
+            </ul>
+        </nav>
+    </header>
+    <div class="container">
+        <h1 class="title">Cracking open the Python dictionary</h1>
+        <hr class="divider">
+        <div class="blogs-container">
+            <h2 class="subtitle">Introduction: why do we care?</h2>
+            <p> Anyone who has used python for basic scripting is going to be familiar with Python's <code>dict</code>
+                (dictionary) object.<br>
+                It is a key-value store allowing for average <code>O(1)</code> lookups of values which is essential for
+                efficient class method lookups <br>(via <code>__dict__</code>), membership testing and global variable
+                access.<br>
+            </p>
+            <p class="code-inline">
+                class PyClass: <br>
+                &nbsp;&nbsp;def __init__(self): <br>
+                &nbsp;&nbsp;&nbsp;&nbsp;self.foo = "bar" <br>
+                obj = PyClass()<br>
+                obj.__dict__ # {'foo': 'bar'}
+            </p>
+            <p>
+                If you have taken any sort of DSA class you may realize that the dictionary is just a hashmap and go no
+                further, but if you dig deeper into its implementation you may begin to question why some design
+                decisions have been made.<br>
+                In this post I will aim to answer all questions you might have about the dictionary. I will start with a
+                brief overview of hashmaps before delving into Python's specific implementation choices, the major
+                redesign in Python 3.6, and the performance implications of these architectural decisions.
+            </p>
+            <hr class="divider">
+            <h2 class="subtitle">How do hashmaps work?</h2>
+            <p>
+                In simple terms a hashmap is a data structure which uses two components to store key-value pairs: an
+                array used to store items, and a hash function.
+            </p>
+            <h3 class="subtitle">What is a hash function?</h3>
+            <p>
+                A hash function is a one-way function which takes in some bytes as input (the key) and produces a
+                seemingly random integer (the hash-code) as output.
+                I say seemingly random because whilst the output appears random, providing the same input to the hash
+                function will produce identical output.
+                The hash-code is then used to index into the array, where the value is stored.
+            <p class="text-note">
+                Note: in practice a reference to the value is stored, if I say value I am referring to the reference.
+            </p>
+            </p>
+            <p>
+                Characteristics of a good hash function for the purposes of a hashmap are as follows:<br>
+            <ul>
+                <li><strong>Deterministic:</strong> passing the same input twice should produce identical output</li>
+                <li><strong>Efficient:</strong> computing a hash should be fast and computationally inexpensive<br></li>
+                <li><strong>Uniformly Distributed (Collision-Resistant):</strong> the function should spread keys evenly
+                    across all possible array slots to <strong>minimize</strong> collisions.</li>
+            </ul>
+            <br>
+            Other properties such as it being one-way are important for cryptographic use cases, but are not important
+            in the context of a hashmap.
+            </p>
+            <h3 class="subtitle">What happens when there is a hash collision?</h3>
+            <p>
+                The set of possible inputs to a function is infinite and the set of outputs is finite (say the set of
+                all 32-bit integers), therefore collisions are inevitable and ways of handling them are needed.<br>
+                There are two ways of handling collisions: chaining and open-addressing.
+            </p>
+            <p>
+                <strong>Chaining:</strong> instead of storing a reference to the value in the hashmap, a reference to
+                the head of a linked list is stored where the value of the node is a reference to the value.<br>
+                When there is a hash collision the linked list is traversed until the tail is reached and a new node is
+                created and appended to the linked list.<br>
+                <strong>Open-addressing:</strong> the hashmap still stores references to the values. When there is a
+                hash collision the array is iterated until the next free slot is found, where the value is stored.<br>
+                Methods for finding the next index change depending on the implementation, the simplest method would
+                just be checking the next index in the array (linear probing).
+            </p>
+            <p>
+                Because both these methods involve iteration, the worst case complexity for hashmap operations is
+                <code>O(N)</code>. This isn't an issue for smaller in-memory hashmaps, but for large hashmaps this can
+                lead to severe performance bottlenecks.
+                Also, because you cannot be sure that you have got the correct value for your key, the key must also be
+                stored next to the value, array slots are commonly referred to as "buckets".<br>
+                When you perform a lookup in the hashmap the key is hashed to get the correct array index and then the
+                key in the bucket is compared with the key passed during the lookup.
+            </p>
+            <h3 class="subtitle">Resizing a hashmap</h3>
+            <p>
+                Many hashmap implementations automatically resize the hashmap when a certain capacity requirement has
+                been met (often called the load factor).
+                This operation involves allocating memory for a larger array before rehashing keys and copying the
+                values over to the new array, then deallocating the old array.<br>
+                This is an expensive operation so, implementations usually double the size of the array.
+            </p>
+            <hr class="divider">
+            <h2 class="subtitle">Python's Implementation</h2>
+            <p>
+                Python updated the implementation of the dict in Python 3.6 with Raymond Hettinger's "compact dict" design (<a class="blog-link" href=https://mail.python.org/pipermail/python-dev/2012-December/123028.html">original discussion</a>), which preserved insertion order and improved performance.
+            </p>
+            <h3 class="subtitle">Pre 3.6 dict</h3>
+            <p>
+                Prior to Python 3.6 the Python <code>dict</code> was implemented as a single sparse array of entries.
+            <p class="code-inline">
+                struct dict {<br>
+                &nbsp;&nbsp;long num_items;<br>
+                &nbsp;&nbsp;dict_entry* items;<br>
+                }
+                <br>
+                <br>
+                struct dict_entry {<br>
+                &nbsp;&nbsp;long hash;<br>
+                &nbsp;&nbsp;PyObject* key;<br>
+                &nbsp;&nbsp;PyObject* value;<br>
+                }
+                <br>
+                // [dict_entry0, NULL, NULL, dict_entry4, NULL, dict_entry2, NULL, ...]
+            </p>
+            This is a more conventional hashmap. The hash of the key determines the entry's position in the array.<br>
+            The amount of <code>NULL</code> entries in the array meant that iterating over the items in the
+            <code>dict</code> would be inefficient, the order of entries was also not preserved - this could be
+            problematic in cases where <code>**kwargs</code> were expected to be passed in order.<br>
+            If you wanted to preserve the order you would instead have to use an <code>OrderedDict</code>.
+            </p>
+            <h3 class="subtitle">Modern Python dict</h3>
+            <p>
+                The modern dictionary splits the hashmap into two separate arrays: a sparse array holding indices, and a
+                compact array for the entries.
+            <p class="code-inline">
+                struct dict {<br>
+                &nbsp;&nbsp;long num_items;<br>
+                &nbsp;&nbsp;variable_int *sparse_array;<br>
+                &nbsp;&nbsp;dict_entry* compact_array;<br>
+                }
+                <br>
+                <br>
+                struct dict_entry {<br>
+                &nbsp;&nbsp;long hash;<br>
+                &nbsp;&nbsp;PyObject *key;<br>
+                &nbsp;&nbsp;PyObject *value;<br>
+                }
+            </p>
+            When new key-value pairs are added, new entries are appended to the end of the compact array, this has the
+            side-effect of also preserving insertion order.<br>
+            The indices array serves as the actual hashmap, the key is hashed and inserted at the correct offset in this
+            array, and it points to the location of the bucket in the compact array.<br>
+            If you need to iterate over the <code>dict</code>, Python simply iterates over the compact array, this
+            avoids repeatedly checking if the slot is <code>NULL</code>.
+            </p>
+            <p class="text-note">
+                Note: While dictionaries preserved insertion order starting in Python 3.6, this was initially considered a CPython implementation detail rather than a guaranteed language feature. 
+                It wasn't until Python 3.7 that ordered dictionaries became part of the official language specification.
+            </p>
+            <h3 class="subtitle">How the modern dict works</h3>
+            <p>
+                The modern approach for looking up a key in the <code>dict</code> is as follows: <br>
+                Python hashes the key to get an initial index into the <code>indices</code> array. It then reads the
+                value at that position, which points to the *actual* location of the bucket in the <code>entries</code>
+                array. Python checks the key in that bucket, and if it matches, the value is returned. If the keys don't
+                match, the probing algorithm calculates the next index to check in the <code>indices</code> array, and
+                the process is repeated.
+            </p>
+            <p>
+                When a key-value pair is inserted, Python first hashes the key to find an initial slot in the
+                <code>indices</code> array.
+                If there is no empty slot, Python begins probing the array until it either finds the key (and updates
+                the bucket with the new value), or it finds an empty slot.
+                If an empty slot was found, the bucket is appended to the <code>entries</code> array.
+                Instead of linear probing, it applies a pseudo-random probing sequence to spread collisions uniformly
+                across the table.<br>
+            <p class="code-inline">
+                size_t i = (size_t)hash & mask;<br>
+                ...<br>
+                perturb >>= PERTURB_SHIFT;<br>
+                i = mask & (i*5 + perturb + 1);
+            </p>
+            The value of <code>PERTURB_SHIFT</code> is set to 5 — small enough to let the high bits of the hash
+            influence many probe steps, but large enough for those bits to affect the earliest probes in worst-case
+            scenarios.
+            This is the case because when two hashes have the same initial index, their higher order bits are still
+            likely to be different.
+            Tim Peters found through experiments that 5 gave the lowest total collisions in both typical and worst
+            cases, though 4 and 6 performed almost as well.
+            </p>
+            <p>
+                Whilst deletion of an entry can seem trivial, it is important to consider what happens when you have
+                hash collisions.
+                Say two keys <code>key1</code> and <code>key2</code> hashed to the same index, <code>key2</code> is
+                placed in the next index found in the probing sequence.<br>
+                If <code>key1</code> is then deleted and replaced with <code>NULL</code>, lookups on <code>key2</code>
+                would fail because the probing algorithm stops as soon as it finds and empty slot.<br>
+                When searching for <code>key2</code>, Python starts at the initial index, see the <code>NULL</code> value
+                where <code>key1</code> used to be and terminate, returning a key-error.<br>
+                To solve this Python replaces the deleted entry's slot in the <code>indices</code> array with a
+                <strong>"dummy"</strong> marker indicating that there could be keys beyond the slot.
+            <p class="text-note">
+                // A special pointer is used to mark a deleted entry<br>
+                #define DUMMY &amp;dummy_entry
+            </p>
+            </p>
+            <p>
+                In order to keep lookups fast, resizing of the sparse <code>indices</code> array is needed when it gets
+                too large.<br>
+                Resizing is triggered when the load factor of the <code>indices</code> array reaches <code>2/3</code>.
+                During resizing, deleted entries are also cleaned up.<br>
+                During resizing, a new <code>indices</code> array is created. Its size is calculated to be the next
+                power of 2 large enough to hold all current entries while keeping the load factor well below
+                <code>2/3</code>.
+                Using the amount of used entries as opposed to the size of the old <code>indices</code> array means that
+                dictionaries with many deletions do not become excessively large after resizing.<br>
+                Python then iterates over the active entries in the <code>entries</code> array, rehashing the keys and
+                inserting them in the correct place in the new <code>indices</code> array.<br>
+                The check for resizing is:
+            <p class="code-inline">
+                //total used slots >= (total capacity * 2) / 3<br>
+                mp->ma_used >= (mp->ma_keys->dk_nentries * 2) / 3
+            </p>
+            </p>
+            <h3 class="subtitle">Performance benefits</h3>
+            <p>
+                Prior to Python 3.6, searching for a key would work as follows:<br>
+            <ul>
+                <li>Calculate the index using the hash function and key (e.g. <code>hash(key) % array_size</code>)</li>
+                <li>Probe the array starting from the index, ignoring collisions, return the value if found and
+                    <code>NULL</code> otherwise</li>
+            </ul>
+            <p class="text-note">Note: Python uses <code>index = hash(key) & (array_size - 1)</code>, which is
+                equivalent to modulo for powers of 2. This is because modulo can be slow to compute - Python will always
+                resize the dictionary to a power of 2 as a result.</p>
+            This is fine but there are some downsides compared to the new approach.<br>
+            Using a single array means that not only will there be <code>NULL</code> entries, but each entry is larger,
+            each bucket stores the key and the reference to the value. Therefore when performing any operation on the
+            <code>dict</code>, a larger data structure has to be loaded - even if the key doesn't exist.<br>
+            </p>
+            <p>
+            A sparsely populated array containing larger entries (24 bytes each) is not cache friendly. When the CPU
+            needs data a cache line (the smallest amount of data transferable) is fetched. On most modern processors,
+            the size of a cache line is 64 bytes meaning only two indexes can be loaded into cache at a single time.<br>
+            The newer implementation uses a variable sized int array to store the indices, the size of the int changes
+            depending on the size of the largest possible index - a dictionary with between 255 and 65535 entries would
+            use 16 bit integers for example.<br>
+            In this case, 32 indexes can be loaded at a time, and the (hash, key, value) bucket is only loaded it has
+            been confirmed to be in the hashmap. This will also reduce expensive cache misses on the sparse array,
+            further improving performance.
+            </p>
+            <h3 class="subtitle">Security Considerations - DoS attacks</h3>
+            <p>
+                If a hashmap is not properly implemented it can lead to denial-of-service (DoS) attacks, which can slow
+                down or potentially crash an application.<br>
+                These work by finding a number of inputs (an attacker would want as many as possible) which will hash to
+                the same location.<br>
+                If an attacker is able to insert entries which have hash collisions, not only would subsequent inserts
+                gradually get slower, they could also perform a lookup on the very last value added which would also be
+                <code>O(N)</code>.<br>
+                This would also trigger hashmap resizing to occur since python uses open-addressing as opposed to
+                chaining.<br>
+            </p>
+            <p>
+                Python negates this by salting their hash function (controlled by the <code>PYTHONHASHSEED</code>
+                environment variable). This means that hashing the same key on different devices will produce different
+                output.
+                <p class="text-note">Note: This was introduced prior to Python 3.6</p>
+            </p>
+            <hr class="divider">
+            <h2 class="subtitle">Benchmarking the change</h2>
+            <p>
+                To see the impact of the changes made in the Python 3.6 dictionary redesign, I ran a series of
+                benchmarks looking at: memory consumption, insertion speed, and iteration speed.
+                <br><br>
+                For the benchmarking I used two identical Docker containers, one with Python 3.5 and the other with
+                Python 3.6.
+            <p class="code-inline">
+                FROM python:3.6-slim<br><br>
+                WORKDIR /app<br>
+                COPY bench.py .<br><br>
+                CMD ["python", "bench.py"]
+            </p>
+            </p>
+            <p>
+                I first checked the differences with a dictionary of <strong>5,000,000</strong> entries. As expected,
+                the clear winner was Python 3.6's dictionary.
+            </p>
+            <table class="benchmark-table">
+                <thead>
+                    <tr>
+                        <th>Test</th>
+                        <th>Python 3.5 (Old)</th>
+                        <th>Python 3.6 (New)</th>
+                        <th>Improvement</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Insertion</td>
+                        <td>1.1550 s</td>
+                        <td>0.9749 s</td>
+                        <td><strong>~16% faster</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Iteration</td>
+                        <td>0.1084 s</td>
+                        <td>0.0217 s</td>
+                        <td><strong>~400% faster</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Memory</td>
+                        <td>610.55 MiB</td>
+                        <td>578.55 MiB</td>
+                        <td><strong>~5% smaller</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="text-note">Note: benchmarking results will vary based on system and use case</p>
+            <p>
+                The most dramatic change was in iteration speed, which is almost 5 times faster. This is the result of
+                the new compact array removing the need to skip over <code>NULL</code> entries, and instead iterating
+                over the dense <code>entries</code> array.
+            </p>
+
+            <h3 class="subtitle">Seeing the Resize in Action</h3>
+            <p>
+                I then wanted to see the size difference after a resize operation.
+                As we know, Python will always make the underlying array a power of 2. This allows for a fast bitwise
+                AND operation (<code>hash & (size - 1)</code>) to find an item's initial position, which is much quicker
+                than using a modulo (<code>%</code>) operator.
+            </p>
+            <p>
+                With a load factor of <code>2/3</code>, I calculated that the next resize would be triggered at
+                <strong>5,592,406</strong> items. I ran the benchmarks for both Python versions just below and right at
+                this threshold. While insertion and iteration performance took a small hit, the most drastic change was
+                in the memory requirements.
+            </p>
+            <table class="benchmark-table">
+                <thead>
+                    <tr>
+                        <th>Test (Resize Trigger)</th>
+                        <th>Python 3.5 (Old)</th>
+                        <th>Python 3.6 (New)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Memory Before Resize</td>
+                        <td>660.27 MiB</td>
+                        <td>628.27 MiB</td>
+                    </tr>
+                    <tr>
+                        <td>Memory After Resize</td>
+                        <td>1044.27 MiB</td>
+                        <td>948.27 MiB</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Memory Jump</strong></td>
+                        <td><strong>+384 MiB</strong></td>
+                        <td><strong>+320 MiB</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>
+                Whilst both had a large jump in memory, the old implementation's larger jump shows the benefit of
+                separating the index from the entries.
+                When the resize happened, both dictionaries allocated a new, larger array with a capacity of
+                <strong>16,777,216</strong> (2<sup>24</sup>). The difference in the memory jump comes down to the size
+                of an "empty" slot.
+            </p>
+            <p>
+                In the Python 3.5 dictionary, each empty slot is a <strong>24-byte</strong> struct. In Python 3.6, an
+                empty slot in the <code>indices</code> array is just a <strong>4-byte</strong> integer.
+                This means that when resizing, the old dictionary allocated millions of empty, 24-byte structs, while
+                the new dictionary only had to allocate millions of much smaller, 4-byte integers. That's why the new
+                dictionary is over 60 MiB leaner after the resize.
+            </p>
+            <hr class="divider">
+            <h2 class="subtitle">Conclusion</h2>
+            <p>
+                So whilst the Python dictionary may seem like a simple hashmap, in reality it is really a masterclass in
+                data structure design. <br>
+                The tweak to the underlying layout of the dictionary introduced in Python 3.6 led to an increase in
+                insertion and iteration speed, whilst decreasing memory consumption as well as the added benefit of
+                preserving insertion order.<br>
+                Next time you type out <code>{}</code> in your Python code you can be aware of the engineering that went
+                into this seemingly simple data structure.
+            </p>
+        </div>
+    </div>
+</body>
+
+</html>

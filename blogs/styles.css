@@ -229,3 +229,36 @@ body {
     border-bottom-style: solid;
 }
 
+.blog-link {
+    color: #6366f1;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    display: inline;
+}
+
+.blog-link:hover {
+    color: #8b5cf6;
+    border-bottom: 1px solid #6366f1;
+}
+
+.blog-link:visited {
+    color: #a855f7;
+}
+
+.benchmark-table {
+ width: 100%;
+ border-collapse: collapse;
+ margin-bottom: 20px;
+}
+
+.benchmark-table th,
+.benchmark-table td {
+ padding: 8px;
+ border: 1px solid #ddd;
+ text-align: left;
+}
+
+.benchmark-table th {
+ background-color: #f2f2f2;
+ color: #000;
+}
